@@ -1,0 +1,5 @@
+github_api_url: "https://api.github.com"
+repo_owner: "Pucjers"
+repo_name: "test_rep"
+github_token: ""
+branch_prefix: "premium/"
