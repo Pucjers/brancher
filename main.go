@@ -316,14 +316,14 @@ func mergeMainToDirectories() error {
 		if file.IsDir() && strings.HasPrefix(file.Name(), "repo-") {
 			dir := file.Name()
 			branchName := strings.Replace(dir, "repo-", "", 1)
-
+			safeBranchName := strings.ReplaceAll(branchName, "_", "/")
 			log.Printf("Merging 'main' into branch '%s' in GitHub...", branchName)
 
 			mergeURL := fmt.Sprintf("%s/repos/%s/%s/merges", config.GitHubAPIURL, config.RepoOwner, config.RepoName)
 			payload := map[string]string{
-				"base":           branchName,
+				"base":           safeBranchName,
 				"head":           "main",
-				"commit_message": fmt.Sprintf("Merging 'main' into '%s'", branchName),
+				"commit_message": fmt.Sprintf("Merging 'main' into '%s'", safeBranchName),
 			}
 
 			headers := map[string]string{
@@ -332,9 +332,9 @@ func mergeMainToDirectories() error {
 			}
 
 			if _, err := makeRequest("POST", mergeURL, headers, payload); err != nil {
-				log.Printf("Failed to merge 'main' into branch '%s': %v", branchName, err)
+				log.Printf("Failed to merge 'main' into branch '%s': %v", safeBranchName, err)
 			} else {
-				log.Printf("Successfully merged 'main' into branch '%s'", branchName)
+				log.Printf("Successfully merged 'main' into branch '%s'", safeBranchName)
 			}
 
 			log.Printf("Merging 'main' into local directory: %s", dir)
