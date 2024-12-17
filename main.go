@@ -194,7 +194,9 @@ func createBranch(branchName, token string) error {
 func cloneBranchToDirectory(branchName string) error {
 	dirName := fmt.Sprintf("repo-%s", strings.ReplaceAll(branchName, "/", "_"))
 
-	cloneCmd := fmt.Sprintf("git clone -b %s https://github.com/%s/%s.git %s", branchName, config.RepoOwner, config.RepoName, dirName)
+	repoURL := fmt.Sprintf("https://%s@github.com/%s/%s.git", config.GitHubToken, config.RepoOwner, config.RepoName)
+
+	cloneCmd := fmt.Sprintf("git clone -b %s %s %s", branchName, repoURL, dirName)
 
 	log.Printf("Cloning branch '%s' into directory '%s'...", branchName, dirName)
 
