@@ -303,18 +303,21 @@ func mergeMainToBranches() error {
 	for _, branch := range branches {
 		name := branch["name"].(string)
 		if strings.HasPrefix(name, config.BranchPrefix) {
-			mergeURL := fmt.Sprintf("%s/repos/%s/%s/merges", config.GitHubAPIURL, config.RepoOwner, config.RepoName)
-			mergePayload := map[string]string{
-				"base": name,
-				"head": "main",
+			log.Printf("Merging main into branch: %s", name)
+
+			cmd := exec.Command("sh", "-c", fmt.Sprintf(
+				"git fetch origin && git checkout %s && git merge --no-ff -X ours origin/main", name))
+
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				log.Printf("Merge conflict occurred in branch %s: %v", name, err)
+				continue
 			}
-			_, err := makeRequest("POST", mergeURL, headers, mergePayload)
-			if err != nil {
-				log.Printf("Failed to merge main into %s: %v", name, err)
-			}
+
+			log.Printf("Successfully merged main into %s", name)
 		}
 	}
-
 	return nil
 }
 
