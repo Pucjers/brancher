@@ -103,7 +103,7 @@ func checkTokenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func mergeMainHandler(w http.ResponseWriter, r *http.Request) {
-	if err := mergeMainToBranches(); err != nil {
+	if err := mergeMainToDirectories(); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to merge main: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
@@ -184,6 +184,25 @@ func createBranch(branchName, token string) error {
 		}
 	}
 
+	if err := cloneBranchToDirectory(branchName); err != nil {
+		return fmt.Errorf("failed to clone branch locally: %w", err)
+	}
+
+	return nil
+}
+
+func cloneBranchToDirectory(branchName string) error {
+	dirName := fmt.Sprintf("repo-%s", strings.ReplaceAll(branchName, "/", "_"))
+
+	cloneCmd := fmt.Sprintf("git clone -b %s https://github.com/%s/%s.git %s", branchName, config.RepoOwner, config.RepoName, dirName)
+
+	log.Printf("Cloning branch '%s' into directory '%s'...", branchName, dirName)
+
+	if err := executeCommand(cloneCmd); err != nil {
+		return fmt.Errorf("failed to clone branch '%s': %w", branchName, err)
+	}
+
+	log.Printf("Branch '%s' successfully cloned into '%s'", branchName, dirName)
 	return nil
 }
 
@@ -285,44 +304,30 @@ func updateAndStartService(branchName string) error {
 	return nil
 }
 
-func mergeMainToBranches() error {
-	headers := map[string]string{
-		"Authorization": fmt.Sprintf("token %s", config.GitHubToken),
-		"Accept":        "application/vnd.github.v3+json",
-	}
-
-	branchesURL := fmt.Sprintf("%s/repos/%s/%s/branches", config.GitHubAPIURL, config.RepoOwner, config.RepoName)
-	branchesResp, err := makeRequest("GET", branchesURL, headers, nil)
+func mergeMainToDirectories() error {
+	files, err := ioutil.ReadDir(".")
 	if err != nil {
-		return fmt.Errorf("failed to fetch branches: %w", err)
+		return fmt.Errorf("failed to list directories: %w", err)
 	}
 
-	var branches []map[string]interface{}
-	json.Unmarshal(branchesResp, &branches)
+	for _, file := range files {
+		if file.IsDir() && strings.HasPrefix(file.Name(), "repo-") {
+			dir := file.Name()
+			log.Printf("Merging 'main' into branch in directory: %s", dir)
 
-	for _, branch := range branches {
-		name := branch["name"].(string)
-		if strings.HasPrefix(name, config.BranchPrefix) {
-			log.Printf("Merging main into branch: %s", name)
-
-			cmd := exec.Command("sh", "-c", fmt.Sprintf(
-				"git fetch origin && git checkout %s && git merge --no-ff -X ours origin/main", name))
-
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				log.Printf("Merge conflict occurred in branch %s: %v", name, err)
-				continue
+			mergeCmd := fmt.Sprintf("cd %s && git checkout main && git pull origin main && git checkout . && git merge main", dir)
+			if err := executeCommand(mergeCmd); err != nil {
+				log.Printf("Merge failed for directory %s: %v", dir, err)
+			} else {
+				log.Printf("Successfully merged 'main' into branch in directory %s", dir)
 			}
-
-			log.Printf("Successfully merged main into %s", name)
 		}
 	}
+
 	return nil
 }
 
 func deleteBranchAndService(branchName string) error {
-	// Delete GitHub branch
 	headers := map[string]string{
 		"Authorization": fmt.Sprintf("token %s", config.GitHubToken),
 		"Accept":        "application/vnd.github.v3+json",
@@ -333,7 +338,6 @@ func deleteBranchAndService(branchName string) error {
 		return fmt.Errorf("failed to delete branch %s: %w", branchName, err)
 	}
 
-	// Stop and delete systemd service
 	safeBranchName := strings.ReplaceAll(branchName, "/", "_")
 	cmds := []string{
 		fmt.Sprintf("systemctl stop %s.service", safeBranchName),
