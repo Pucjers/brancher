@@ -315,13 +315,34 @@ func mergeMainToDirectories() error {
 	for _, file := range files {
 		if file.IsDir() && strings.HasPrefix(file.Name(), "repo-") {
 			dir := file.Name()
-			log.Printf("Merging 'main' into branch in directory: %s", dir)
+			branchName := strings.Replace(dir, "repo-", "", 1)
 
+			log.Printf("Merging 'main' into branch '%s' in GitHub...", branchName)
+
+			mergeURL := fmt.Sprintf("%s/repos/%s/%s/merges", config.GitHubAPIURL, config.RepoOwner, config.RepoName)
+			payload := map[string]string{
+				"base":           branchName,
+				"head":           "main",
+				"commit_message": fmt.Sprintf("Merging 'main' into '%s'", branchName),
+			}
+
+			headers := map[string]string{
+				"Authorization": fmt.Sprintf("token %s", config.GitHubToken),
+				"Accept":        "application/vnd.github.v3+json",
+			}
+
+			if _, err := makeRequest("POST", mergeURL, headers, payload); err != nil {
+				log.Printf("Failed to merge 'main' into branch '%s': %v", branchName, err)
+			} else {
+				log.Printf("Successfully merged 'main' into branch '%s'", branchName)
+			}
+
+			log.Printf("Merging 'main' into local directory: %s", dir)
 			mergeCmd := fmt.Sprintf("cd %s && git checkout main && git pull origin main && git checkout . && git merge main", dir)
 			if err := executeCommand(mergeCmd); err != nil {
-				log.Printf("Merge failed for directory %s: %v", dir, err)
+				log.Printf("Local merge failed for directory %s: %v", dir, err)
 			} else {
-				log.Printf("Successfully merged 'main' into branch in directory %s", dir)
+				log.Printf("Successfully merged 'main' locally in directory %s", dir)
 			}
 		}
 	}
