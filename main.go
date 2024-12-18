@@ -231,7 +231,7 @@ func modifyConfig(filePath, fileSHA, branchName, telegramToken string, headers m
 	var configFile map[string]interface{}
 	yaml.Unmarshal(decodedContent, &configFile)
 	configFile["bot_token"] = telegramToken
-	configFile["redis_token"] = ""
+	configFile["redis"] = ""
 
 	updatedContent, _ := yaml.Marshal(configFile)
 	encodedContent := base64.StdEncoding.EncodeToString(updatedContent)
