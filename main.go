@@ -38,42 +38,50 @@ type RequestBody struct {
 var config Config
 
 func main() {
-	loadConfig()
+	if err := loadConfig(); err != nil {
+		log.Fatalf("Error loading configuration: %v", err)
+	}
 
 	http.HandleFunc("/check-token", checkTokenHandler)
 	http.HandleFunc("/merge-main", mergeMainHandler)
 	http.HandleFunc("/delete-branch", deleteBranchHandler)
 
 	log.Println("Server running on port 5000")
-	log.Fatal(http.ListenAndServe(":5000", nil))
+	if err := http.ListenAndServe(":5000", nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
 
-func loadConfig() {
+func loadConfig() error {
 	file, err := os.Open("config/config.yaml")
 	if err != nil {
-		log.Fatalf("Failed to load config.yaml: %v", err)
+		return fmt.Errorf("failed to open config.yaml: %w", err)
 	}
 	defer file.Close()
 
 	decoder := yaml.NewDecoder(file)
 	if err := decoder.Decode(&config); err != nil {
-		log.Fatalf("Failed to parse config.yaml: %v", err)
+		return fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
+	return nil
 }
 
 func checkTokenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		log.Printf("Invalid request method: %s", r.Method)
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var body RequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		log.Printf("Invalid JSON body: %v", err)
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
 
 	if body.Token == "" || body.BranchName == "" {
+		log.Println("Missing token or branch name in request")
 		http.Error(w, "Token and branch name are required", http.StatusBadRequest)
 		return
 	}
@@ -81,45 +89,55 @@ func checkTokenHandler(w http.ResponseWriter, r *http.Request) {
 	branchName := config.BranchPrefix + body.BranchName
 
 	if err := createBranch(branchName, body.Token); err != nil {
+		log.Printf("Failed to create branch: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to create branch: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	if err := createServiceFile(branchName); err != nil {
+		log.Printf("Failed to create service file: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to create service file: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	if err := updateAndStartService(branchName); err != nil {
+		log.Printf("Failed to start service: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to start service: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "success",
 		"branch": branchName,
-	})
+	}); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
 }
 
 func mergeMainHandler(w http.ResponseWriter, r *http.Request) {
 	if err := mergeMainToDirectories(); err != nil {
+		log.Printf("Failed to merge main: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to merge main: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success"}`))
+	if _, err := w.Write([]byte(`{"status": "success"}`)); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
 }
 
 func deleteBranchHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		log.Printf("Invalid request method: %s", r.Method)
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var body RequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		log.Printf("Invalid JSON body: %v", err)
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
@@ -127,12 +145,15 @@ func deleteBranchHandler(w http.ResponseWriter, r *http.Request) {
 	branchName := config.BranchPrefix + body.BranchName
 
 	if err := deleteBranchAndService(branchName); err != nil {
+		log.Printf("Failed to delete branch or service: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to delete branch or service: %s", err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "success"}`))
+	if _, err := w.Write([]byte(`{"status": "success"}`)); err != nil {
+		log.Printf("Failed to write response: %v", err)
+	}
 }
 
 func createBranch(branchName, token string) error {
