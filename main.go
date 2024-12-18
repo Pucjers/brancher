@@ -346,6 +346,11 @@ func mergeMainToDirectories() error {
 				log.Printf("Successfully merged 'main' into branch '%s'", safeBranchName)
 			}
 
+			mainFilePath := path.Join(dir, "main")
+			if err := os.Remove(mainFilePath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("failed to remove old binary: %w", err)
+			}
+
 			log.Printf("Merging 'main' into local directory: %s", dir)
 			mergeCmd := fmt.Sprintf("cd %s && git checkout main && git pull origin main && git checkout . && git merge main", dir)
 			if err := executeCommand(mergeCmd); err != nil {
