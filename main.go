@@ -389,11 +389,16 @@ func deleteBranchAndService(branchName string) error {
 		}
 	}
 
-	// Delete cron job
-	// cronFilePath := fmt.Sprintf("/etc/cron.d/%s", branchName)
-	// if err := os.Remove(cronFilePath); err != nil && !os.IsNotExist(err) {
-	// 	return fmt.Errorf("failed to delete cron file: %w", err)
-	// }
+	localDir := fmt.Sprintf("repo-%s", safeBranchName)
+	if _, err := os.Stat(localDir); err == nil {
+		log.Printf("Removing local directory: %s", localDir)
+		if err := os.RemoveAll(localDir); err != nil {
+			return fmt.Errorf("failed to remove local directory %s: %w", localDir, err)
+		}
+		log.Printf("Successfully removed local directory: %s", localDir)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("error checking local directory %s: %w", localDir, err)
+	}
 
 	return nil
 }
