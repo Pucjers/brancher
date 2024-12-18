@@ -187,6 +187,15 @@ func createBranch(branchName, token string) error {
 	if err := cloneBranchToDirectory(branchName); err != nil {
 		return fmt.Errorf("failed to clone branch locally: %w", err)
 	}
+	dirName := fmt.Sprintf("repo-%s", strings.ReplaceAll(branchName, "/", "_"))
+	buildCmd := fmt.Sprintf("cd %s && go build -o main main.go", dirName)
+
+	log.Printf("Building main.go in directory '%s'...", dirName)
+	if err := executeCommand(buildCmd); err != nil {
+		return fmt.Errorf("failed to build main.go in '%s': %w", dirName, err)
+	}
+
+	log.Printf("Successfully built main.go in directory '%s'", dirName)
 
 	return nil
 }
@@ -344,6 +353,12 @@ func mergeMainToDirectories() error {
 			} else {
 				log.Printf("Successfully merged 'main' locally in directory %s", dir)
 			}
+
+			if err := buildMainFile(dir); err != nil {
+				log.Printf("Failed to build main file in directory %s: %v", dir, err)
+			} else {
+				log.Printf("Successfully built main file in directory %s", dir)
+			}
 		}
 	}
 
@@ -380,6 +395,21 @@ func deleteBranchAndService(branchName string) error {
 	// 	return fmt.Errorf("failed to delete cron file: %w", err)
 	// }
 
+	return nil
+}
+
+func buildMainFile(directory string) error {
+	mainFilePath := path.Join(directory, "main")
+	if err := os.Remove(mainFilePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove old binary: %w", err)
+	}
+
+	buildCmd := fmt.Sprintf("cd %s && go build -o main main.go", directory)
+	if err := executeCommand(buildCmd); err != nil {
+		return fmt.Errorf("build failed: %w", err)
+	}
+
+	log.Printf("New binary built at %s", mainFilePath)
 	return nil
 }
 
